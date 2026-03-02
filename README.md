@@ -18,7 +18,7 @@ OpenClaw skill that finds US stocks near their 52-week lows with decent fundamen
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/<your-username>/market-scout.git
+git clone https://github.com/raghavan/market-scout.git
 cd market-scout
 npm install
 ```
