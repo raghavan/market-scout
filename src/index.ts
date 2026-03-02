@@ -8,6 +8,7 @@ config();
 
 const AV_KEY = process.env.ALPHA_VANTAGE_API_KEY;
 const BRAVE_KEY = process.env.BRAVE_API_KEY;
+const TELEGRAM_TARGET = process.env.TELEGRAM_TARGET; // chat ID or @username
 const AV_BASE = "https://www.alphavantage.co/query";
 const BRAVE_NEWS = "https://api.search.brave.com/res/v1/news/search";
 
@@ -266,14 +267,14 @@ function sendToTelegram(message: string): void {
     .replace(/`/g, "\\`");
 
   try {
-    execSync(`openclaw message send --target telegram --message "${escaped}"`, {
-      stdio: "inherit",
-      timeout: 30_000,
-    });
+    execSync(
+      `openclaw message send --channel telegram --target ${TELEGRAM_TARGET} --message "${escaped}"`,
+      { stdio: "inherit", timeout: 30_000 }
+    );
     console.log("   ✓ Report sent to Telegram");
   } catch (err: any) {
     console.error("   ✗ Failed to send to Telegram:", err.message);
-    console.log("\n--- Report (fallback to console) ---\n");
+    console.log("\n--- Report (console fallback) ---\n");
     console.log(message);
   }
 }
