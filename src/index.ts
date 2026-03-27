@@ -16,6 +16,9 @@ const DRY_RUN = process.argv.includes("--dry-run");
 const MAX_LOSERS_TO_SCAN = 5; // limit API calls
 const PE_MAX = 20;
 const NEAR_LOW_THRESHOLD = 1.05; // within 5% of 52-week low
+const MIN_INSTITUTIONAL_PCT = 10; // minimum institutional ownership %
+const MIN_REVENUE_TTM = 100_000_000; // $100M minimum TTM revenue
+const MIN_FLOAT = 1_000_000; // 1M shares minimum float
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -50,6 +53,9 @@ interface CompanyOverview {
   DividendYield: string;
   ProfitMargin: string;
   RevenueTTM: string;
+  PercentInstitutions: string;
+  SharesOutstanding: string;
+  SharesFloat: string;
 }
 
 interface NewsArticle {
@@ -71,6 +77,7 @@ interface ScoutResult {
   sector: string;
   analystTarget: number | null;
   marketCap: string;
+  institutionalPct: number | null;
   news: NewsArticle[];
 }
 
@@ -184,6 +191,27 @@ function evaluateCandidate(
   const low52 = parseNum(overview["52WeekLow"]);
   const pe = parseNum(overview.PERatio);
   const forwardPe = parseNum(overview.ForwardPE);
+  const revenueTTM = parseNum(overview.RevenueTTM);
+  const instPct = parseNum(overview.PercentInstitutions);
+  const sharesFloat = parseNum(overview.SharesFloat);
+
+  // Revenue filter
+  if (!revenueTTM || revenueTTM < MIN_REVENUE_TTM) {
+    const revStr = revenueTTM ? `$${(revenueTTM / 1e6).toFixed(1)}M` : "N/A";
+    return { pass: false, reason: `revenue too low (${revStr}, min $100M)` };
+  }
+
+  // Institutional ownership filter
+  if (!instPct || instPct < MIN_INSTITUTIONAL_PCT) {
+    const pctStr = instPct != null ? `${instPct.toFixed(1)}%` : "N/A";
+    return { pass: false, reason: `institutional ownership too low (${pctStr}, min ${MIN_INSTITUTIONAL_PCT}%)` };
+  }
+
+  // Float filter
+  if (!sharesFloat || sharesFloat < MIN_FLOAT) {
+    const floatStr = sharesFloat ? `${(sharesFloat / 1000).toFixed(0)}k shares` : "N/A";
+    return { pass: false, reason: `float too small (${floatStr}, min 1M)` };
+  }
 
   // Must have a valid 52-week low
   if (!low52) return { pass: false, reason: "no 52-week low data" };
@@ -227,7 +255,8 @@ function formatAlert(results: ScoutResult[]): string {
     msg += `**${r.symbol}** — ${r.name}\n`;
     msg += `Price: $${r.price.toFixed(2)} (${r.change}) | ${peLabel}: ${pe?.toFixed(1)}\n`;
     msg += `52w Low: $${r.low52w.toFixed(2)} (${pctFromLow}% above) | High: $${r.high52w.toFixed(2)}\n`;
-    msg += `Sector: ${r.sector} | Mkt Cap: ${r.marketCap}\n`;
+    const instOwn = r.institutionalPct != null ? `${r.institutionalPct.toFixed(1)}%` : "N/A";
+    msg += `Sector: ${r.sector} | Mkt Cap: ${r.marketCap} | Inst. Own: ${instOwn}\n`;
 
     if (upside) {
       msg += `Analyst Target: $${r.analystTarget!.toFixed(2)} (${upside} upside)\n`;
@@ -334,6 +363,7 @@ async function main(): Promise<void> {
       sector: overview.Sector || "N/A",
       analystTarget: parseNum(overview.AnalystTargetPrice),
       marketCap: formatMarketCap(overview.MarketCapitalization),
+      institutionalPct: parseNum(overview.PercentInstitutions),
       news,
     });
   }
